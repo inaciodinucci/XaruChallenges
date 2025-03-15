@@ -1,0 +1,24 @@
+name: XaruChallenges
+version: 1.0
+main: xaruplex.xaruchallenges.XaruChallenges
+api-version: 1.21
+description: A plugin that adds gameplay challenges to modify player behavior
+author: Xaruplex
+commands:
+  xaruchallenges:
+    description: Main command for XaruChallenges plugin
+    aliases: [xc]
+    usage: |
+      /<command> help - Shows help
+      /<command> list - Lists available challenges
+      /<command> add <challenge> <player> - Adds a challenge to a player
+      /<command> remove <challenge> <player> - Removes a challenge from a player
+      /<command> losecounter <enable|disable> - Manages the lose counter display
+    permission: xaruchallenges.use
+permissions:
+  xaruchallenges.use:
+    description: Allows usage of basic XaruChallenges commands
+    default: true
+  xaruchallenges.admin:
+    description: Allows usage of administrative XaruChallenges commands
+    default: op
