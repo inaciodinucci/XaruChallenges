@@ -45,7 +45,7 @@ public class HollowBones implements Challenge {
     public void removeChallenge(Player player) {
         AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
         if (maxHealth != null) {
-            maxHealth.setBaseValue(20.0); // Reset to default max health
+            maxHealth.setBaseValue(20.0);
             player.setHealth(20.0);
         }
     }

@@ -38,7 +38,7 @@ public class OreDeath implements Challenge {
 
     @Override
     public void removeChallenge(Player player) {
-        // No cleanup needed
+
     }
 
     @Override

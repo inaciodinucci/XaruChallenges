@@ -36,7 +36,7 @@ public class CaseOh implements Challenge {
 
     @Override
     public void removeChallenge(Player player) {
-        // No cleanup needed
+
     }
 
     @Override
