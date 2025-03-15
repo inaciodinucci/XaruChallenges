@@ -46,9 +46,12 @@ public class Mole implements Challenge {
     public boolean handleEvent(Event event, Player player) {
         if (event instanceof PlayerMoveEvent) {
             PlayerMoveEvent moveEvent = (PlayerMoveEvent) event;
-            Block block = moveEvent.getTo().getBlock().getRelative(0, -1, 0);
 
-            if (!isAllowedBlock(block.getType())) {
+            // Check if the player is actually standing on a block
+            Block blockBelow = moveEvent.getTo().getBlock().getRelative(0, -1, 0);
+
+            // Only apply damage if the block below is solid and not an allowed block
+            if (blockBelow.getType().isSolid() && !isAllowedBlock(blockBelow.getType())) {
                 player.damage(2.0);
                 player.sendMessage(ChatColor.RED + "You can only walk on dirt, coarse dirt, or sand!");
                 return true;

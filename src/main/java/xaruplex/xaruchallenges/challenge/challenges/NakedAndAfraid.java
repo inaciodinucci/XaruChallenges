@@ -12,11 +12,17 @@ import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class NakedAndAfraid implements Challenge {
 
     private final XaruChallenges plugin;
     private final ConfigManager configManager;
+    private final Map<UUID, BukkitRunnable> armorCheckTasks = new HashMap<>();
 
     public NakedAndAfraid(XaruChallenges plugin, ConfigManager configManager) {
         this.plugin = plugin;
@@ -36,30 +42,36 @@ public class NakedAndAfraid implements Challenge {
     @Override
     public boolean applyChallenge(Player player) {
         // Remove any currently equipped armor
-        PlayerInventory inventory = player.getInventory();
-        ItemStack[] armorContents = inventory.getArmorContents();
+        removeArmor(player);
 
-        boolean hadArmor = false;
-        for (int i = 0; i < armorContents.length; i++) {
-            if (armorContents[i] != null && armorContents[i].getType() != Material.AIR) {
-                // Drop the armor item at the player's location
-                player.getWorld().dropItemNaturally(player.getLocation(), armorContents[i]);
-                armorContents[i] = null;
-                hadArmor = true;
+        // Start a task to periodically check for armor
+        UUID playerId = player.getUniqueId();
+        BukkitRunnable task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!player.isOnline()) {
+                    cancel();
+                    armorCheckTasks.remove(playerId);
+                    return;
+                }
+
+                // Check and remove armor periodically
+                removeArmor(player);
             }
-        }
-
-        if (hadArmor) {
-            inventory.setArmorContents(armorContents);
-            player.sendMessage(ChatColor.RED + "Your armor has been removed!");
-        }
+        };
+        task.runTaskTimer(plugin, 0L, 20L); // Check every second
+        armorCheckTasks.put(playerId, task);
 
         return true;
     }
 
     @Override
     public void removeChallenge(Player player) {
-        // No cleanup needed
+        UUID playerId = player.getUniqueId();
+        if (armorCheckTasks.containsKey(playerId)) {
+            armorCheckTasks.get(playerId).cancel();
+            armorCheckTasks.remove(playerId);
+        }
     }
 
     @Override
@@ -96,6 +108,26 @@ public class NakedAndAfraid implements Challenge {
         }
 
         return false;
+    }
+
+    private void removeArmor(Player player) {
+        PlayerInventory inventory = player.getInventory();
+        ItemStack[] armorContents = inventory.getArmorContents();
+
+        boolean hadArmor = false;
+        for (int i = 0; i < armorContents.length; i++) {
+            if (armorContents[i] != null && armorContents[i].getType() != Material.AIR) {
+                // Drop the armor item at the player's location
+                player.getWorld().dropItemNaturally(player.getLocation(), armorContents[i]);
+                armorContents[i] = null;
+                hadArmor = true;
+            }
+        }
+
+        if (hadArmor) {
+            inventory.setArmorContents(armorContents);
+            player.sendMessage(ChatColor.RED + "Your armor has been removed!");
+        }
     }
 
     private boolean isArmorSlotClick(InventoryClickEvent event) {

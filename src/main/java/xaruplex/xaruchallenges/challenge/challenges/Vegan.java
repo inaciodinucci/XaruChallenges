@@ -9,8 +9,11 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.PotionMeta;
+import org.bukkit.potion.PotionEffectType;
 
 public class Vegan implements Challenge {
 
@@ -29,8 +32,8 @@ public class Vegan implements Challenge {
 
     @Override
     public String getDescription() {
-        return "You cannot attack any entity or consume any food of animal origin. " +
-                "If you kill any living entity, you receive divine punishment.";
+        return "You cannot consume any food of animal origin or use certain potions. " +
+                "If you hit any living entity or eat non-vegan food, you receive divine punishment.";
     }
 
     @Override
@@ -47,15 +50,8 @@ public class Vegan implements Challenge {
     public boolean handleEvent(Event event, Player player) {
         if (event instanceof EntityDamageByEntityEvent) {
             EntityDamageByEntityEvent damageEvent = (EntityDamageByEntityEvent) event;
-            if (damageEvent.getEntity() instanceof LivingEntity) {
-                damageEvent.setCancelled(true);
-                player.sendMessage(ChatColor.RED + "You cannot harm living beings!");
-                return true;
-            }
-        } else if (event instanceof EntityDeathEvent) {
-            EntityDeathEvent deathEvent = (EntityDeathEvent) event;
-            if (deathEvent.getEntity().getKiller() != null &&
-                    deathEvent.getEntity().getKiller().equals(player)) {
+            if (damageEvent.getDamager().equals(player) && damageEvent.getEntity() instanceof LivingEntity) {
+                // Trigger divine punishment when the player hits any living entity
                 executeDivinePunishment(player);
                 return true;
             }
@@ -64,6 +60,16 @@ public class Vegan implements Challenge {
             if (isNonVeganFood(consumeEvent.getItem().getType())) {
                 consumeEvent.setCancelled(true);
                 player.sendMessage(ChatColor.RED + "You cannot eat non-vegan food!");
+                // Trigger divine punishment for attempting to eat non-vegan food
+                executeDivinePunishment(player);
+                return true;
+            }
+        } else if (event instanceof PlayerInteractEvent) {
+            PlayerInteractEvent interactEvent = (PlayerInteractEvent) event;
+            ItemStack item = interactEvent.getItem();
+            if (item != null && isForbiddenPotion(item)) {
+                interactEvent.setCancelled(true);
+                player.sendMessage(ChatColor.RED + "You cannot use this potion!");
                 return true;
             }
         }
@@ -74,25 +80,39 @@ public class Vegan implements Challenge {
         return configManager.getMaterialList("Vegan.disallowed-food").contains(material);
     }
 
+    private boolean isForbiddenPotion(ItemStack item) {
+        if (item.getType() == Material.POTION || item.getType() == Material.SPLASH_POTION || item.getType() == Material.LINGERING_POTION) {
+            PotionMeta meta = (PotionMeta) item.getItemMeta();
+            if (meta != null) {
+                // Check for forbidden potion effects
+                return meta.hasCustomEffect(PotionEffectType.SLOWNESS) ||
+                        meta.hasCustomEffect(PotionEffectType.WEAKNESS) ||
+                        meta.hasCustomEffect(PotionEffectType.INVISIBILITY) ||
+                        meta.hasCustomEffect(PotionEffectType.INSTANT_DAMAGE);
+            }
+        }
+        return false;
+    }
+
     private void executeDivinePunishment(Player player) {
+        // Clear the player's inventory instantly
+        player.getInventory().clear();
+
+        // Strike the player with lightning multiple times
         int strikes = configManager.getInt("Vegan.divine-punishment.lightning-strikes", 30);
-
-
         for (int i = 0; i < strikes; i++) {
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 player.getWorld().strikeLightning(player.getLocation());
             }, i * 2L); // Strike every 2 ticks
         }
 
-        player.getInventory().clear();
-
-
+        // Kill the player after all lightning strikes
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline() && player.getHealth() > 0) {
                 player.setHealth(0);
             }
         }, strikes * 2L + 5L);
 
-        player.sendMessage(ChatColor.RED + "Divine punishment has been unleashed upon you!");
+        player.sendMessage(ChatColor.RED + "Divine punishment has been unleashed upon you for violating vegan principles!");
     }
 }

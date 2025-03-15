@@ -1,8 +1,13 @@
 package xaruplex.xaruchallenges.challenge;
 
+import org.bukkit.scoreboard.DisplaySlot;
+import org.bukkit.scoreboard.Objective;
+import org.bukkit.scoreboard.Score;
+import org.bukkit.scoreboard.Scoreboard;
 import xaruplex.xaruchallenges.XaruChallenges;
 import xaruplex.xaruchallenges.challenge.challenges.*;
 import xaruplex.xaruchallenges.config.ConfigManager;
+import xaruplex.xaruchallenges.data.DataManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -18,14 +23,16 @@ public class ChallengeManager {
 
     private final XaruChallenges plugin;
     private final ConfigManager configManager;
+    private final DataManager dataManager; // Add dataManager field
     private final Map<String, Challenge> availableChallenges;
     private final Map<UUID, List<Challenge>> activeChallenges;
     private final Map<UUID, Integer> loseCounters;
     private final Map<UUID, Boolean> loseCounterEnabled;
 
-    public ChallengeManager(XaruChallenges plugin, ConfigManager configManager) {
+    public ChallengeManager(XaruChallenges plugin, ConfigManager configManager, DataManager dataManager) {
         this.plugin = plugin;
         this.configManager = configManager;
+        this.dataManager = dataManager; // Initialize dataManager
         this.availableChallenges = new HashMap<>();
         this.activeChallenges = new HashMap<>();
         this.loseCounters = new HashMap<>();
@@ -203,7 +210,7 @@ public class ChallengeManager {
             updateLoseCounter(player);
         } else {
             // Remove the scoreboard display
-            // Implementation depends on how you choose to display the lose counter
+            player.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
         }
     }
 
@@ -213,8 +220,13 @@ public class ChallengeManager {
     }
 
     private void updateLoseCounter(Player player) {
-        // Implementation for updating the scoreboard or other display method
-        // This could use Bukkit's scoreboard API or another method of your choice
+        int loseCount = loseCounters.getOrDefault(player.getUniqueId(), 0);
+        Scoreboard scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
+        Objective objective = scoreboard.registerNewObjective("loseCounter", "dummy", ChatColor.RED + "Lose Counter");
+        objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+        Score score = objective.getScore(ChatColor.YELLOW + "Loses: " + loseCount);
+        score.setScore(1);
+        player.setScoreboard(scoreboard);
     }
 
     public void cleanupAllChallenges() {
@@ -234,5 +246,25 @@ public class ChallengeManager {
         activeChallenges.clear();
         loseCounters.clear();
         loseCounterEnabled.clear();
+    }
+
+    public void loadPlayerChallenges(Player player) {
+        UUID playerId = player.getUniqueId();
+        List<String> challengeNames = dataManager.loadChallenges(playerId);
+        for (String challengeName : challengeNames) {
+            Challenge challenge = availableChallenges.get(challengeName.toLowerCase());
+            if (challenge != null) {
+                challenge.applyChallenge(player);
+                activeChallenges.computeIfAbsent(playerId, k -> new ArrayList<>()).add(challenge);
+            }
+        }
+    }
+
+    public void savePlayerChallenges(Player player) {
+        UUID playerId = player.getUniqueId();
+        List<Challenge> challenges = activeChallenges.get(playerId);
+        if (challenges != null) {
+            dataManager.saveChallenges(playerId, challenges);
+        }
     }
 }

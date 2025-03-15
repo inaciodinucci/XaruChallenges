@@ -1,5 +1,6 @@
 package xaruplex.xaruchallenges.challenge.challenges;
 
+import org.bukkit.Material;
 import xaruplex.xaruchallenges.XaruChallenges;
 import xaruplex.xaruchallenges.challenge.Challenge;
 import xaruplex.xaruchallenges.config.ConfigManager;
@@ -7,13 +8,16 @@ import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.Villager;
+import org.bukkit.entity.*;
 import org.bukkit.event.Event;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.inventory.meta.PotionMeta;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.potion.PotionEffect;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -42,7 +46,9 @@ public class Vampire implements Challenge {
     @Override
     public String getDescription() {
         return "You can only walk in shadows and at night. Sunlight causes fire damage. " +
-                "Regain health by attacking players or villagers. Killing players fully restores you.";
+                "Regain health and hunger by attacking players or villagers. Killing players fully restores you. " +
+                "You can only eat golden apples and drink potions (except Fire Resistance). " +
+                "If you somehow gain Fire Resistance, you will die instantly.";
     }
 
     @Override
@@ -60,12 +66,19 @@ public class Vampire implements Challenge {
                     return;
                 }
 
-                // Check if it's daytime and player is exposed to sunlight
+                // Check if it's daytime and player is exposed to sunlight (but not rain)
                 if (isInSunlight(player)) {
                     double damage = configManager.getDouble("Vampire.damage-in-sunlight", 1.0);
                     player.setFireTicks(20); // Set on fire for 1 second
                     player.damage(damage);
                     player.sendMessage(ChatColor.RED + "The sunlight burns your vampire skin!");
+                }
+
+                // Apply night buffs
+                if (isNight(player.getWorld())) {
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, 400, 0, true, false));
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 400, 0, true, false));
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, 400, 1, true, false)); // Jump Boost II
                 }
             }
         }.runTaskTimer(plugin, 0L, 10L); // Check every half second
@@ -85,6 +98,11 @@ public class Vampire implements Challenge {
 
         lastHungerDecay.remove(playerId);
         player.setFireTicks(0);
+
+        // Remove night buffs
+        player.removePotionEffect(PotionEffectType.NIGHT_VISION);
+        player.removePotionEffect(PotionEffectType.SPEED);
+        player.removePotionEffect(PotionEffectType.JUMP_BOOST);
     }
 
     @Override
@@ -95,6 +113,10 @@ public class Vampire implements Challenge {
             return handleDeathEvent((EntityDeathEvent) event, player);
         } else if (event instanceof FoodLevelChangeEvent) {
             return handleHungerEvent((FoodLevelChangeEvent) event, player);
+        } else if (event instanceof PlayerItemConsumeEvent) {
+            return handleConsumeEvent((PlayerItemConsumeEvent) event, player);
+        } else if (event instanceof EntityPotionEffectEvent) {
+            return handlePotionEffectEvent((EntityPotionEffectEvent) event, player);
         }
         return false;
     }
@@ -102,12 +124,22 @@ public class Vampire implements Challenge {
     private boolean handleDamageEvent(EntityDamageByEntityEvent event, Player player) {
         if (event.getDamager().equals(player)) {
             if (event.getEntity() instanceof Player || event.getEntity() instanceof Villager) {
-                // Heal the vampire when they hit a player or villager
+                // Heal the vampire and restore hunger when they hit a player or villager
                 double currentHealth = player.getHealth();
                 double maxHealth = player.getAttribute(Attribute.MAX_HEALTH).getValue();
                 double healAmount = 2.0; // Heal 1 heart per hit
 
                 player.setHealth(Math.min(currentHealth + healAmount, maxHealth));
+                player.setFoodLevel(Math.min(player.getFoodLevel() + 2, 20)); // Restore 1 hunger point
+                player.setSaturation(Math.min(player.getSaturation() + 2, 20)); // Restore saturation
+
+                // Penalize the victim
+                if (event.getEntity() instanceof Player) {
+                    Player victim = (Player) event.getEntity();
+                    victim.damage(2.0); // Damage the victim
+                    victim.setFoodLevel(Math.max(victim.getFoodLevel() - 2, 0)); // Reduce victim's hunger
+                }
+
                 player.sendMessage(ChatColor.DARK_RED + "You drain their life force!");
                 return true;
             }
@@ -142,6 +174,44 @@ public class Vampire implements Challenge {
         return false;
     }
 
+    private boolean handleConsumeEvent(PlayerItemConsumeEvent event, Player player) {
+        Material itemType = event.getItem().getType();
+        if (!isAllowedFood(itemType)) {
+            event.setCancelled(true);
+            player.sendMessage(ChatColor.RED + "You can only eat golden apples and drink potions (except Fire Resistance)!");
+            return true;
+        }
+
+        // Check if the potion is Fire Resistance
+        if (itemType == Material.POTION || itemType == Material.SPLASH_POTION || itemType == Material.LINGERING_POTION) {
+            PotionMeta meta = (PotionMeta) event.getItem().getItemMeta();
+            if (meta != null && meta.hasCustomEffect(PotionEffectType.FIRE_RESISTANCE)) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.RED + "You cannot use Fire Resistance potions!");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean handlePotionEffectEvent(EntityPotionEffectEvent event, Player player) {
+        if (event.getEntity().equals(player) && event.getNewEffect() != null) {
+            // Check if the new effect is Fire Resistance
+            if (event.getNewEffect().getType() == PotionEffectType.FIRE_RESISTANCE) {
+                // Kill the player instantly
+                player.setHealth(0);
+                player.sendMessage(ChatColor.RED + "You have been killed for gaining Fire Resistance!");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isAllowedFood(Material material) {
+        return material == Material.GOLDEN_APPLE || material == Material.ENCHANTED_GOLDEN_APPLE || material == Material.POTION;
+    }
+
     private boolean isInSunlight(Player player) {
         World world = player.getWorld();
 
@@ -157,8 +227,19 @@ public class Vampire implements Challenge {
             return false;
         }
 
+        // Check if it's raining (rain does not cause sunlight damage)
+        if (world.hasStorm()) {
+            return false;
+        }
+
+        // Check light level from the sky
         int lightLevel = player.getLocation().getBlock().getLightFromSky();
         int threshold = configManager.getInt("Vampire.light-level-threshold", 12);
         return lightLevel >= threshold;
+    }
+
+    private boolean isNight(World world) {
+        long time = world.getTime();
+        return time >= 13000 && time <= 23000;
     }
 }

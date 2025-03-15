@@ -19,7 +19,6 @@ op-management: true
 Piranha:
   damage-outside-water: 2.0
   allow-vehicles: false
-  underwater-effect: WATER_BREATHING
   disallowed-food:
     - COD
     - COOKED_COD
@@ -28,12 +27,17 @@ Piranha:
     - TROPICAL_FISH
     - PUFFERFISH
     - DRIED_KELP
-    - KELP
   allowed-food: []
 
 Vampire:
   damage-in-sunlight: 1.0
-  light-level-threshold: 12
+  light-level-threshold: 12  # Minimum light level to trigger sunlight damage
+  allowed-food:
+    - GOLDEN_APPLE
+    - ENCHANTED_GOLDEN_APPLE
+    - POTION
+  forbidden-potions:
+    - FIRE_RESISTANCE
 
 Daredevil:
   blindness-effect: true
@@ -45,7 +49,8 @@ CaseOh:
   sprint-disabled: true
 
 Chinchilla:
-  water-death: true
+  rain-damage: 1.0  # Damage per interval when exposed to rain
+  rain-damage-interval: 20  # Damage interval in ticks (20 ticks = 1 second)
   allowed-food:
     - COD
     - COOKED_COD
@@ -102,6 +107,16 @@ OreDeath:
     - LAPIS_BLOCK
     - LAPIS_LAZULI
     - DEEPSLATE_LAPIS_ORE
+    - COAL_ORE
+    - COAL
+    - COAL_BLOCK
+    - DEEPSLATE_COAL_ORE
+    - AMETHYST_BLOCK
+    - AMETHYST_SHARD
+    - SMALL_AMETHYST_BUD
+    - MEDIUM_AMETHYST_BUD
+    - LARGE_AMETHYST_BUD
+    - AMETHYST_CLUSTER
 
 Vegan:
   disallowed-food:
@@ -119,6 +134,17 @@ Vegan:
     - COOKED_COD
     - SALMON
     - COOKED_SALMON
+    - RABBIT_STEW
+    - PUMPKIN_PIE
+    - CAKE
+    - TROPICAL_FISH
+    - PUFFERFISH
+    - MILK_BUCKET
+  forbidden-potions:
+    - SLOWNESS
+    - WEAKNESS
+    - INVISIBILITY
+    - INSTANT_DAMAGE
   divine-punishment:
     lightning-strikes: 30
 

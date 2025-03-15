@@ -8,6 +8,7 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.player.PlayerBedEnterEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.vehicle.VehicleEnterEvent;
@@ -39,14 +40,16 @@ public class Piranha implements Challenge {
 
     @Override
     public String getDescription() {
-        return "You can only breathe underwater. Air will cause you to take damage. Cannot eat fish or kelp.";
+        return "You can only breathe underwater. Air will cause you to take damage. Cannot eat fish or kelp. " +
+                "You gain Dolphin's Grace while entirely underwater. You can walk/swim through seagrass and tall seagrass, " +
+                "and sleep in beds underwater.";
     }
 
     @Override
     public boolean applyChallenge(Player player) {
         UUID playerId = player.getUniqueId();
 
-        // Start the task that checks if the player is in water
+        // Start the task that checks if the player is entirely underwater
         BukkitTask task = new BukkitRunnable() {
             @Override
             public void run() {
@@ -56,15 +59,16 @@ public class Piranha implements Challenge {
                     return;
                 }
 
-                // Check if player is in water
-                if (!player.isInWater()) {
-                    // Player is not in water, apply damage
+                // Check if player is entirely underwater
+                if (isEntirelyUnderwater(player)) {
+                    // Player is entirely underwater, give Water Breathing and Dolphin's Grace
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 40, 0, false, false));
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, 40, 0, false, false));
+                } else if (isInAir(player)) {
+                    // Player is in air, apply damage
                     double damage = configManager.getDouble("Piranha.damage-outside-water", 2.0);
                     player.damage(damage);
-                    player.sendMessage(ChatColor.RED + "You need to be in water!");
-                } else {
-                    // Player is in water, give water breathing
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 40, 0, false, false));
+                    player.sendMessage(ChatColor.RED + "You need to be entirely underwater!");
                 }
             }
         }.runTaskTimer(plugin, 0L, 20L); // Check every second
@@ -86,6 +90,7 @@ public class Piranha implements Challenge {
 
         // Remove any potion effects
         player.removePotionEffect(PotionEffectType.WATER_BREATHING);
+        player.removePotionEffect(PotionEffectType.DOLPHINS_GRACE);
     }
 
     @Override
@@ -120,9 +125,27 @@ public class Piranha implements Challenge {
                 player.sendMessage(ChatColor.RED + "You cannot eat this food as a Piranha!");
                 return true;
             }
+        } else if (event instanceof PlayerBedEnterEvent) {
+            PlayerBedEnterEvent bedEvent = (PlayerBedEnterEvent) event;
+
+            // Allow sleeping in beds underwater
+            if (isEntirelyUnderwater(player)) {
+                bedEvent.setCancelled(false); // Allow the player to sleep
+                return true;
+            }
         }
 
         return false;
+    }
+
+    private boolean isEntirelyUnderwater(Player player) {
+        return player.getLocation().getBlock().getType() == Material.WATER &&
+                player.getEyeLocation().getBlock().getType() == Material.WATER;
+    }
+
+    private boolean isInAir(Player player) {
+        // Check if the player is in air (not water or other blocks like seagrass)
+        return player.getLocation().getBlock().getType() == Material.AIR;
     }
 
     private boolean isAllowedFood(Material food) {

@@ -31,6 +31,11 @@ public class ConfigManager {
         this.config = YamlConfiguration.loadConfiguration(configFile);
     }
 
+    public void reloadConfig() {
+        // Reload the configuration from the file
+        this.config = YamlConfiguration.loadConfiguration(configFile);
+    }
+
     private void createDefaultConfig() {
         config = plugin.getConfig();
 
@@ -74,24 +79,63 @@ public class ConfigManager {
         // Piranha Challenge
         config.addDefault("Piranha.damage-outside-water", 2.0);
         config.addDefault("Piranha.allow-vehicles", false);
-        config.addDefault("Piranha.underwater-effect", "WATER_BREATHING");
-
-        List<String> piranhaDisallowedFood = new ArrayList<>();
-        piranhaDisallowedFood.add("COD");
-        piranhaDisallowedFood.add("COOKED_COD");
-        piranhaDisallowedFood.add("SALMON");
-        piranhaDisallowedFood.add("COOKED_SALMON");
-        piranhaDisallowedFood.add("TROPICAL_FISH");
-        piranhaDisallowedFood.add("PUFFERFISH");
-        piranhaDisallowedFood.add("DRIED_KELP");
-        piranhaDisallowedFood.add("KELP");
-        config.addDefault("Piranha.disallowed-food", piranhaDisallowedFood);
+        config.addDefault("Piranha.disallowed-food", List.of("COD", "COOKED_COD", "SALMON", "COOKED_SALMON", "TROPICAL_FISH", "PUFFERFISH", "DRIED_KELP"));
         config.addDefault("Piranha.allowed-food", new ArrayList<String>());
 
-        // Other challenges...
+        // Vampire Challenge
+        config.addDefault("Vampire.damage-in-sunlight", 1.0);
+        config.addDefault("Vampire.light-level-threshold", 12);
+        config.addDefault("Vampire.allowed-food", List.of("GOLDEN_APPLE", "ENCHANTED_GOLDEN_APPLE", "POTION"));
+        config.addDefault("Vampire.forbidden-potions", List.of("FIRE_RESISTANCE"));
+
+        // Daredevil Challenge
+        config.addDefault("Daredevil.blindness-effect", true);
+
+        // HollowBones Challenge
+        config.addDefault("HollowBones.max-health", 2);
+
+        // CaseOh Challenge
+        config.addDefault("CaseOh.sprint-disabled", true);
+
+        // Chinchilla Challenge
+        config.addDefault("Chinchilla.rain-damage", 1.0);
+        config.addDefault("Chinchilla.rain-damage-interval", 20);
+        config.addDefault("Chinchilla.allowed-food", List.of("COD", "COOKED_COD", "SALMON", "COOKED_SALMON", "TROPICAL_FISH", "PUFFERFISH"));
+
+        // Prasinophobia Challenge
+        config.addDefault("Prasinophobia.disallowed-blocks", List.of("GRASS_BLOCK", "TALL_GRASS", "LEAVES", "VINE"));
+
+        // Mole Challenge
+        config.addDefault("Mole.allowed-blocks", List.of("DIRT", "COARSE_DIRT", "SAND"));
+
+        // OreDeath Challenge
+        config.addDefault("OreDeath.ore-list", List.of(
+                "IRON_ORE", "RAW_IRON", "DEEPSLATE_IRON_ORE", "RAW_IRON_BLOCK", "IRON_BLOCK", "IRON_INGOT", "IRON_NUGGET",
+                "GOLD_ORE", "RAW_GOLD", "DEEPSLATE_GOLD_ORE", "RAW_GOLD_BLOCK", "GOLD_BLOCK", "GOLD_INGOT", "NETHER_GOLD_ORE", "GOLD_NUGGET",
+                "ANCIENT_DEBRIS", "NETHERITE_INGOT", "DIAMOND_ORE", "DIAMOND", "DEEPSLATE_DIAMOND_ORE", "EMERALD_ORE", "EMERALD",
+                "COPPER_ORE", "RAW_COPPER_INGOT", "COPPER_INGOT", "REDSTONE_ORE", "REDSTONE_BLOCK", "LAPIS_ORE", "LAPIS_BLOCK", "LAPIS_LAZULI",
+                "DEEPSLATE_LAPIS_ORE", "COAL_ORE", "COAL", "COAL_BLOCK", "DEEPSLATE_COAL_ORE", "AMETHYST_BLOCK", "AMETHYST_SHARD",
+                "SMALL_AMETHYST_BUD", "MEDIUM_AMETHYST_BUD", "LARGE_AMETHYST_BUD", "AMETHYST_CLUSTER"
+        ));
+
+        // Vegan Challenge
+        config.addDefault("Vegan.disallowed-food", List.of(
+                "BEEF", "COOKED_BEEF", "CHICKEN", "COOKED_CHICKEN", "PORKCHOP", "COOKED_PORKCHOP", "MUTTON", "COOKED_MUTTON",
+                "RABBIT", "COOKED_RABBIT", "COD", "COOKED_COD", "SALMON", "COOKED_SALMON", "RABBIT_STEW", "PUMPKIN_PIE", "CAKE",
+                "TROPICAL_FISH", "PUFFERFISH", "MILK_BUCKET"
+        ));
+        config.addDefault("Vegan.forbidden-potions", List.of("SLOWNESS", "WEAKNESS", "INVISIBILITY", "INSTANT_DAMAGE"));
+        config.addDefault("Vegan.divine-punishment.lightning-strikes", 30);
+
+        // Vulture Challenge
         config.addDefault("Vulture.allowed-food", "ROTTEN_FLESH");
+
+        // NakedAndAfraid Challenge
         config.addDefault("NakedAndAfraid.armor-disabled", true);
         config.addDefault("NakedAndAfraid.drop-equipped-armor", true);
+
+        // Elf Challenge
+        config.addDefault("Elf.allowed-weapons", List.of("BOW", "CROSSBOW"));
     }
 
     // Database Configuration Getters
@@ -127,11 +171,12 @@ public class ConfigManager {
         return config.getString("database.mysql.password", "pass");
     }
 
-    // Existing configuration getters
+    // General Settings Getters
     public boolean isOpManagementEnabled() {
         return config.getBoolean("op-management", true);
     }
 
+    // Challenge Configuration Getters
     public double getDouble(String path, double defaultValue) {
         return config.getDouble(path, defaultValue);
     }

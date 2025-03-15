@@ -30,7 +30,7 @@ public class Prasinophobia implements Challenge {
 
     @Override
     public String getDescription() {
-        return "You cannot touch any green block.";
+        return "You cannot touch any green block. (WIP, try this one in a newer version)";
     }
 
     @Override

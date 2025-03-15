@@ -51,6 +51,10 @@ public class ChallengeCommand implements CommandExecutor, TabCompleter {
                 return handleRemoveCommand(sender, args);
             case "losecounter":
                 return handleLoseCounterCommand(sender, args);
+            case "reload":
+                return handleReloadCommand(sender);
+            case "challenges":
+                return handleChallengesCommand(sender, args);
             default:
                 sender.sendMessage(ChatColor.RED + "Unknown command. Type /xc help for help.");
                 return false;
@@ -65,6 +69,8 @@ public class ChallengeCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.YELLOW + "/xc remove <challenge> <player> " + ChatColor.WHITE + "- Remove a challenge from a player");
         sender.sendMessage(ChatColor.YELLOW + "/xc losecounter enable " + ChatColor.WHITE + "- Enable the lose counter display");
         sender.sendMessage(ChatColor.YELLOW + "/xc losecounter disable " + ChatColor.WHITE + "- Disable the lose counter display");
+        sender.sendMessage(ChatColor.YELLOW + "/xc reload " + ChatColor.WHITE + "- Reload the plugin configuration");
+        sender.sendMessage(ChatColor.YELLOW + "/xc challenges <player> " + ChatColor.WHITE + "- View active challenges for a player");
     }
 
     private void sendChallengeList(CommandSender sender) {
@@ -164,6 +170,43 @@ public class ChallengeCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private boolean handleReloadCommand(CommandSender sender) {
+        if (!hasAdminPermission(sender)) {
+            sender.sendMessage(ChatColor.RED + "You don't have permission to reload the configuration.");
+            return false;
+        }
+
+        configManager.reloadConfig();
+        sender.sendMessage(ChatColor.GREEN + "Configuration reloaded successfully.");
+        return true;
+    }
+
+    private boolean handleChallengesCommand(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.RED + "Usage: /xc challenges <player>");
+            return false;
+        }
+
+        String playerName = args[1];
+        Player targetPlayer = Bukkit.getPlayer(playerName);
+
+        if (targetPlayer == null || !targetPlayer.isOnline()) {
+            sender.sendMessage(ChatColor.RED + "Player " + playerName + " is not online.");
+            return false;
+        }
+
+        List<Challenge> challenges = challengeManager.getPlayerChallenges(targetPlayer);
+        if (challenges.isEmpty()) {
+            sender.sendMessage(ChatColor.YELLOW + targetPlayer.getName() + " has no active challenges.");
+        } else {
+            sender.sendMessage(ChatColor.GREEN + "=== Active Challenges for " + targetPlayer.getName() + " ===");
+            for (Challenge challenge : challenges) {
+                sender.sendMessage(ChatColor.YELLOW + challenge.getName() + ": " + ChatColor.WHITE + challenge.getDescription());
+            }
+        }
+        return true;
+    }
+
     private boolean hasAdminPermission(CommandSender sender) {
         return sender.isOp() || sender.hasPermission("xaruchallenges.admin");
     }
@@ -175,7 +218,7 @@ public class ChallengeCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             // First argument - subcommand
             String partialCommand = args[0].toLowerCase();
-            List<String> commands = Arrays.asList("help", "list", "add", "remove", "losecounter");
+            List<String> commands = Arrays.asList("help", "list", "add", "remove", "losecounter", "reload", "challenges");
 
             for (String cmd : commands) {
                 if (cmd.startsWith(partialCommand)) {
@@ -183,7 +226,7 @@ public class ChallengeCommand implements CommandExecutor, TabCompleter {
                 }
             }
         } else if (args.length == 2) {
-            // Second argument - challenge name or losecounter option
+            // Second argument - challenge name, losecounter option, or player name
             String subCommand = args[0].toLowerCase();
             String partial = args[1].toLowerCase();
 
@@ -192,7 +235,7 @@ public class ChallengeCommand implements CommandExecutor, TabCompleter {
                 List<String> challenges = challengeManager.getAllChallengeNames();
 
                 for (String challenge : challenges) {
-                    if (challenge.startsWith(partial)) {
+                    if (challenge.toLowerCase().startsWith(partial)) {
                         completions.add(challenge);
                     }
                 }
@@ -205,9 +248,15 @@ public class ChallengeCommand implements CommandExecutor, TabCompleter {
                         completions.add(option);
                     }
                 }
+            } else if (subCommand.equals("challenges")) {
+                // Player name completion
+                return Bukkit.getOnlinePlayers().stream()
+                        .map(Player::getName)
+                        .filter(name -> name.toLowerCase().startsWith(partial))
+                        .collect(Collectors.toList());
             }
         } else if (args.length == 3) {
-            // Third argument - player name
+            // Third argument - player name for add/remove commands
             String subCommand = args[0].toLowerCase();
 
             if (subCommand.equals("add") || subCommand.equals("remove")) {

@@ -8,6 +8,7 @@ import org.bukkit.event.Event;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +31,7 @@ public class Daredevil implements Challenge {
 
     @Override
     public String getDescription() {
-        return "Permanent blindness effect.";
+        return "Permanent blindness and speed effects.";
     }
 
     @Override
@@ -44,10 +45,21 @@ public class Daredevil implements Challenge {
                     tasks.remove(uuid);
                     return;
                 }
+
+                // Apply Blindness effect
                 player.addPotionEffect(new PotionEffect(
                         PotionEffectType.BLINDNESS,
                         400, // 20 seconds
                         0,
+                        true,
+                        false
+                ));
+
+                // Apply Speed effect
+                player.addPotionEffect(new PotionEffect(
+                        PotionEffectType.SPEED,
+                        400, // 20 seconds
+                        1, // Speed level 2 (0 = level 1, 1 = level 2, etc.)
                         true,
                         false
                 ));
@@ -65,7 +77,9 @@ public class Daredevil implements Challenge {
             tasks.get(uuid).cancel();
             tasks.remove(uuid);
         }
+        // Remove both Blindness and Speed effects
         player.removePotionEffect(PotionEffectType.BLINDNESS);
+        player.removePotionEffect(PotionEffectType.SPEED);
     }
 
     @Override

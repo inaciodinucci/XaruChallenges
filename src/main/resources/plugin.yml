@@ -13,12 +13,14 @@ commands:
       /<command> list - Lists available challenges
       /<command> add <challenge> <player> - Adds a challenge to a player
       /<command> remove <challenge> <player> - Removes a challenge from a player
+      /<command> challenges <player> - Shows active challenges for a player
       /<command> losecounter <enable|disable> - Manages the lose counter display
+      /<command> reload - Reloads the plugin configuration
     permission: xaruchallenges.use
 permissions:
   xaruchallenges.use:
     description: Allows usage of basic XaruChallenges commands
     default: true
   xaruchallenges.admin:
-    description: Allows usage of administrative XaruChallenges commands
+    description: Allows usage of administrative XaruChallenges commands (e.g., add, remove, reload)
     default: op
