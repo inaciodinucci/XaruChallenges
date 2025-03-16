@@ -1,7 +1,7 @@
 package xaruplex.xaruchallenges.data;
 
 import xaruplex.xaruchallenges.XaruChallenges;
-import xaruplex.xaruchallenges.challenge.Challenge;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +22,6 @@ public class SQLiteDataManager implements DataManager {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection("jdbc:sqlite:" + plugin.getDataFolder() + "/challenges.db");
             try (Statement stmt = connection.createStatement()) {
-                // Corrected SQL statement
                 stmt.executeUpdate(
                         "CREATE TABLE IF NOT EXISTS player_challenges (" +
                                 "uuid TEXT PRIMARY KEY, " +
@@ -45,8 +44,8 @@ public class SQLiteDataManager implements DataManager {
     }
 
     @Override
-    public void saveChallenges(UUID playerId, List<Challenge> challenges) {
-        String challengeNames = String.join(",", challenges.stream().map(Challenge::getName).toList());
+    public void saveChallenges(UUID playerId, List<String> challenges) {
+        String challengeNames = String.join(",", challenges);
         String sql = "REPLACE INTO player_challenges (uuid, challenges) VALUES (?, ?)";
 
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {

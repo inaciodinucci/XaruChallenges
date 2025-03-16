@@ -13,37 +13,32 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class ChallengeManager {
 
     private final XaruChallenges plugin;
     private final ConfigManager configManager;
-    private final DataManager dataManager; // Add dataManager field
+    private final DataManager dataManager;
     private final Map<String, Challenge> availableChallenges;
-    private final Map<UUID, List<Challenge>> activeChallenges;
+    private final Map<UUID, Set<Challenge>> activeChallenges;
     private final Map<UUID, Integer> loseCounters;
     private final Map<UUID, Boolean> loseCounterEnabled;
 
     public ChallengeManager(XaruChallenges plugin, ConfigManager configManager, DataManager dataManager) {
         this.plugin = plugin;
         this.configManager = configManager;
-        this.dataManager = dataManager; // Initialize dataManager
+        this.dataManager = dataManager;
         this.availableChallenges = new HashMap<>();
         this.activeChallenges = new HashMap<>();
         this.loseCounters = new HashMap<>();
         this.loseCounterEnabled = new HashMap<>();
 
-        // Register all available challenges
         registerChallenges();
     }
 
     private void registerChallenges() {
-        // Initialize and register all challenge implementations
         registerChallenge(new Piranha(plugin, configManager));
         registerChallenge(new Vampire(plugin, configManager));
         registerChallenge(new Daredevil(plugin, configManager));
@@ -71,23 +66,13 @@ public class ChallengeManager {
             return false;
         }
 
-        // Initialize player's challenge list if needed
-        if (!activeChallenges.containsKey(playerId)) {
-            activeChallenges.put(playerId, new ArrayList<>());
-            loseCounters.put(playerId, 0);
+        Set<Challenge> playerChallenges = activeChallenges.computeIfAbsent(playerId, k -> new HashSet<>());
+
+        if (playerChallenges.contains(challenge)) {
+            player.sendMessage(ChatColor.RED + "You already have the " + challenge.getName() + " challenge!");
+            return false;
         }
 
-        List<Challenge> playerChallenges = activeChallenges.get(playerId);
-
-        // Check if player already has this challenge
-        for (Challenge existingChallenge : playerChallenges) {
-            if (existingChallenge.getName().equalsIgnoreCase(challengeName)) {
-                player.sendMessage(ChatColor.RED + "You already have the " + challenge.getName() + " challenge!");
-                return false;
-            }
-        }
-
-        // Apply the challenge
         if (challenge.applyChallenge(player)) {
             playerChallenges.add(challenge);
             player.sendMessage(ChatColor.GREEN + "Challenge " + challenge.getName() + " has been applied to you!");
@@ -100,27 +85,22 @@ public class ChallengeManager {
 
     public boolean removeChallenge(Player player, String challengeName) {
         UUID playerId = player.getUniqueId();
+        Set<Challenge> playerChallenges = activeChallenges.get(playerId);
 
-        if (!activeChallenges.containsKey(playerId)) {
+        if (playerChallenges == null) {
             return false;
         }
 
-        List<Challenge> playerChallenges = activeChallenges.get(playerId);
-        Challenge toRemove = null;
-
-        for (Challenge challenge : playerChallenges) {
-            if (challenge.getName().equalsIgnoreCase(challengeName)) {
-                toRemove = challenge;
-                break;
-            }
-        }
+        Challenge toRemove = playerChallenges.stream()
+                .filter(challenge -> challenge.getName().equalsIgnoreCase(challengeName))
+                .findFirst()
+                .orElse(null);
 
         if (toRemove != null) {
             toRemove.removeChallenge(player);
             playerChallenges.remove(toRemove);
             player.sendMessage(ChatColor.GREEN + "Challenge " + toRemove.getName() + " has been removed!");
 
-            // Remove player from tracking if they have no more challenges
             if (playerChallenges.isEmpty()) {
                 activeChallenges.remove(playerId);
                 loseCounters.remove(playerId);
@@ -134,45 +114,27 @@ public class ChallengeManager {
     }
 
     public void handleEvent(Event event, Player player) {
-        UUID playerId = player.getUniqueId();
+        Set<Challenge> playerChallenges = activeChallenges.get(player.getUniqueId());
 
-        if (!activeChallenges.containsKey(playerId)) {
-            return;
-        }
-
-        List<Challenge> playerChallenges = activeChallenges.get(playerId);
-
-        for (Challenge challenge : playerChallenges) {
-            challenge.handleEvent(event, player);
+        if (playerChallenges != null) {
+            playerChallenges.forEach(challenge -> challenge.handleEvent(event, player));
         }
     }
 
     public boolean hasChallenge(Player player, String challengeName) {
-        UUID playerId = player.getUniqueId();
+        Set<Challenge> playerChallenges = activeChallenges.get(player.getUniqueId());
 
-        if (!activeChallenges.containsKey(playerId)) {
+        if (playerChallenges == null) {
             return false;
         }
 
-        List<Challenge> playerChallenges = activeChallenges.get(playerId);
-
-        for (Challenge challenge : playerChallenges) {
-            if (challenge.getName().equalsIgnoreCase(challengeName)) {
-                return true;
-            }
-        }
-
-        return false;
+        return playerChallenges.stream()
+                .anyMatch(challenge -> challenge.getName().equalsIgnoreCase(challengeName));
     }
 
     public List<Challenge> getPlayerChallenges(Player player) {
-        UUID playerId = player.getUniqueId();
-
-        if (!activeChallenges.containsKey(playerId)) {
-            return new ArrayList<>();
-        }
-
-        return new ArrayList<>(activeChallenges.get(playerId));
+        Set<Challenge> playerChallenges = activeChallenges.get(player.getUniqueId());
+        return playerChallenges != null ? new ArrayList<>(playerChallenges) : new ArrayList<>();
     }
 
     public List<String> getAllChallengeNames() {
@@ -187,10 +149,8 @@ public class ChallengeManager {
         UUID playerId = player.getUniqueId();
 
         if (loseCounters.containsKey(playerId)) {
-            int current = loseCounters.get(playerId);
-            loseCounters.put(playerId, current + 1);
+            loseCounters.put(playerId, loseCounters.get(playerId) + 1);
 
-            // Update the player's scoreboard if lose counter is enabled
             if (isLoseCounterEnabled(player)) {
                 updateLoseCounter(player);
             }
@@ -198,8 +158,7 @@ public class ChallengeManager {
     }
 
     public int getLoseCounter(Player player) {
-        UUID playerId = player.getUniqueId();
-        return loseCounters.getOrDefault(playerId, 0);
+        return loseCounters.getOrDefault(player.getUniqueId(), 0);
     }
 
     public void setLoseCounterEnabled(Player player, boolean enabled) {
@@ -209,14 +168,12 @@ public class ChallengeManager {
         if (enabled) {
             updateLoseCounter(player);
         } else {
-            // Remove the scoreboard display
             player.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
         }
     }
 
     public boolean isLoseCounterEnabled(Player player) {
-        UUID playerId = player.getUniqueId();
-        return loseCounterEnabled.getOrDefault(playerId, false);
+        return loseCounterEnabled.getOrDefault(player.getUniqueId(), false);
     }
 
     private void updateLoseCounter(Player player) {
@@ -230,18 +187,13 @@ public class ChallengeManager {
     }
 
     public void cleanupAllChallenges() {
-        // Remove all challenges from all players when the plugin disables
-        for (UUID playerId : new ArrayList<>(activeChallenges.keySet())) {
+        activeChallenges.keySet().forEach(playerId -> {
             Player player = Bukkit.getPlayer(playerId);
 
             if (player != null && player.isOnline()) {
-                List<Challenge> challenges = new ArrayList<>(activeChallenges.get(playerId));
-
-                for (Challenge challenge : challenges) {
-                    challenge.removeChallenge(player);
-                }
+                activeChallenges.get(playerId).forEach(challenge -> challenge.removeChallenge(player));
             }
-        }
+        });
 
         activeChallenges.clear();
         loseCounters.clear();
@@ -251,20 +203,28 @@ public class ChallengeManager {
     public void loadPlayerChallenges(Player player) {
         UUID playerId = player.getUniqueId();
         List<String> challengeNames = dataManager.loadChallenges(playerId);
-        for (String challengeName : challengeNames) {
-            Challenge challenge = availableChallenges.get(challengeName.toLowerCase());
-            if (challenge != null) {
-                challenge.applyChallenge(player);
-                activeChallenges.computeIfAbsent(playerId, k -> new ArrayList<>()).add(challenge);
-            }
-        }
+        Set<Challenge> playerChallenges = activeChallenges.computeIfAbsent(playerId, k -> new HashSet<>());
+
+        challengeNames.stream()
+                .map(name -> availableChallenges.get(name.toLowerCase()))
+                .filter(Objects::nonNull)
+                .filter(challenge -> !playerChallenges.contains(challenge))
+                .forEach(challenge -> {
+                    if (challenge.applyChallenge(player)) {
+                        playerChallenges.add(challenge);
+                    }
+                });
     }
 
     public void savePlayerChallenges(Player player) {
         UUID playerId = player.getUniqueId();
-        List<Challenge> challenges = activeChallenges.get(playerId);
+        Set<Challenge> challenges = activeChallenges.get(playerId);
+
         if (challenges != null) {
-            dataManager.saveChallenges(playerId, challenges);
+            List<String> challengeNames = challenges.stream()
+                    .map(Challenge::getName)
+                    .collect(Collectors.toList());
+            dataManager.saveChallenges(playerId, challengeNames);
         }
     }
 }

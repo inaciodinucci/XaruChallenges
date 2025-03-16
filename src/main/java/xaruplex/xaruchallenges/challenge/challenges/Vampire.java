@@ -14,7 +14,9 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionEffect;
@@ -71,7 +73,6 @@ public class Vampire implements Challenge {
                     double damage = configManager.getDouble("Vampire.damage-in-sunlight", 1.0);
                     player.setFireTicks(20); // Set on fire for 1 second
                     player.damage(damage);
-                    player.sendMessage(ChatColor.RED + "The sunlight burns your vampire skin!");
                 }
 
                 // Apply night buffs
@@ -117,6 +118,8 @@ public class Vampire implements Challenge {
             return handleConsumeEvent((PlayerItemConsumeEvent) event, player);
         } else if (event instanceof EntityPotionEffectEvent) {
             return handlePotionEffectEvent((EntityPotionEffectEvent) event, player);
+        } else if (event instanceof PlayerInteractEntityEvent) {
+            return handleInteractEntityEvent((PlayerInteractEntityEvent) event, player);
         }
         return false;
     }
@@ -192,6 +195,17 @@ public class Vampire implements Challenge {
             }
         }
 
+        // Handle blood potion consumption
+        if (itemType == Material.POTION && event.getItem().getItemMeta().getDisplayName().equals("Blood")) {
+            double currentHealth = player.getHealth();
+            double maxHealth = player.getAttribute(Attribute.MAX_HEALTH).getValue();
+            player.setHealth(Math.min(currentHealth + 4.0, maxHealth)); // Heal 2 hearts
+            player.setFoodLevel(Math.min(player.getFoodLevel() + 4, 20)); // Restore 2 hunger points
+            player.setSaturation(Math.min(player.getSaturation() + 4, 20)); // Restore saturation
+            player.sendMessage(ChatColor.DARK_RED + "You drink the blood, restoring your health and hunger!");
+            return true;
+        }
+
         return false;
     }
 
@@ -202,6 +216,50 @@ public class Vampire implements Challenge {
                 // Kill the player instantly
                 player.setHealth(0);
                 player.sendMessage(ChatColor.RED + "You have been killed for gaining Fire Resistance!");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean handleInteractEntityEvent(PlayerInteractEntityEvent event, Player player) {
+        if (event.getRightClicked() instanceof Player || event.getRightClicked() instanceof Villager) {
+            ItemStack item = player.getInventory().getItemInMainHand();
+            if (item.getType() == Material.GLASS_BOTTLE) {
+                Entity target = event.getRightClicked();
+
+                // Harm the victim (player or villager)
+                if (target instanceof LivingEntity) {
+                    LivingEntity livingTarget = (LivingEntity) target;
+                    livingTarget.damage(2.0); // Damage the victim
+                    if (target instanceof Player) {
+                        Player victim = (Player) target;
+                        victim.setFoodLevel(Math.max(victim.getFoodLevel() - 2, 0)); // Reduce victim's hunger
+                    }
+                }
+
+                // Heal the vampire and restore hunger
+                double currentHealth = player.getHealth();
+                double maxHealth = player.getAttribute(Attribute.MAX_HEALTH).getValue();
+                player.setHealth(Math.min(currentHealth + 2.0, maxHealth)); // Heal 1 heart
+                player.setFoodLevel(Math.min(player.getFoodLevel() + 2, 20)); // Restore 1 hunger point
+                player.setSaturation(Math.min(player.getSaturation() + 2, 20)); // Restore saturation
+
+                // Create a blood potion
+                ItemStack bloodPotion = new ItemStack(Material.POTION);
+                PotionMeta meta = (PotionMeta) bloodPotion.getItemMeta();
+                meta.setDisplayName("Blood");
+                bloodPotion.setItemMeta(meta);
+
+                // Remove the glass bottle and add the blood potion
+                item.setAmount(item.getAmount() - 1);
+                if (item.getAmount() <= 0) {
+                    player.getInventory().setItemInMainHand(bloodPotion);
+                } else {
+                    player.getInventory().addItem(bloodPotion);
+                }
+
+                player.sendMessage(ChatColor.DARK_RED + "You have collected blood!");
                 return true;
             }
         }

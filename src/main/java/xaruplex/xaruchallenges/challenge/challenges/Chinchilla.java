@@ -5,9 +5,9 @@ import xaruplex.xaruchallenges.challenge.Challenge;
 import xaruplex.xaruchallenges.config.ConfigManager;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
-import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -57,7 +57,6 @@ public class Chinchilla implements Challenge {
                 if (isExposedToRain(player)) {
                     double damage = configManager.getDouble("Chinchilla.rain-damage", 1.0);
                     player.damage(damage);
-                    player.sendMessage(ChatColor.RED + "You are suffocating in the rain!");
                 }
             }
         }.runTaskTimer(plugin, 0L, configManager.getInt("Chinchilla.rain-damage-interval", 20)); // Damage every second (20 ticks)
@@ -89,9 +88,13 @@ public class Chinchilla implements Challenge {
                 return true;
             }
 
-            // Check if the player is no longer exposed to rain
-            if (!isExposedToRain(player)) {
-                // Stop the rain damage task if the player is sheltered
+            // Check if the player is exposed to rain and start the damage task if necessary
+            if (isExposedToRain(player)) {
+                if (!rainDamageTasks.containsKey(player.getUniqueId())) {
+                    applyChallenge(player);
+                }
+            } else {
+                // If the player is no longer exposed to rain, cancel the task
                 if (rainDamageTasks.containsKey(player.getUniqueId())) {
                     rainDamageTasks.get(player.getUniqueId()).cancel();
                     rainDamageTasks.remove(player.getUniqueId());
@@ -116,14 +119,16 @@ public class Chinchilla implements Challenge {
     }
 
     private boolean isExposedToRain(Player player) {
+        World world = player.getWorld();
+
         // Check if it's raining and the player is in a biome where it can rain
-        if (!player.getWorld().hasStorm() || !player.getWorld().getBiome(player.getLocation()).toString().toLowerCase().contains("rain")) {
+        if (!world.hasStorm() || !world.getBiome(player.getLocation()).toString().toLowerCase().contains("rain")) {
             return false;
         }
 
         // Check if the player is directly exposed to the sky (no blocks above them)
         int playerY = player.getLocation().getBlockY();
-        int highestBlockY = player.getWorld().getHighestBlockYAt(player.getLocation());
+        int highestBlockY = world.getHighestBlockYAt(player.getLocation());
 
         return playerY >= highestBlockY;
     }
