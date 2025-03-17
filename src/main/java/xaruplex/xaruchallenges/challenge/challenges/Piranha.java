@@ -10,6 +10,7 @@ import org.bukkit.event.Event;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerBedEnterEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.vehicle.VehicleEnterEvent;
 import org.bukkit.potion.PotionEffect;
@@ -40,14 +41,20 @@ public class Piranha implements Challenge {
 
     @Override
     public String getDescription() {
-        return "You can only breathe underwater. Air will cause you to take damage. Cannot eat fish or kelp. " +
-                "You gain Dolphin's Grace while entirely underwater. You can walk/swim through seagrass and tall seagrass, " +
-                "and sleep in beds underwater.";
+        return "You can only breathe underwater. Air will cause you to take damage. Cannot eat fish or kelp. ";
     }
 
     @Override
     public boolean applyChallenge(Player player) {
         UUID playerId = player.getUniqueId();
+
+        // If there's already a task for this player, cancel it first
+        if (activeTasks.containsKey(playerId)) {
+            activeTasks.get(playerId).cancel();
+        }
+
+        // Apply initial effects if player is underwater
+        checkAndApplyEffects(player);
 
         // Start the task that checks if the player is entirely underwater
         BukkitTask task = new BukkitRunnable() {
@@ -59,23 +66,28 @@ public class Piranha implements Challenge {
                     return;
                 }
 
-                // Check if player is entirely underwater
-                if (isEntirelyUnderwater(player)) {
-                    // Player is entirely underwater, give Water Breathing and Dolphin's Grace
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 40, 0, false, false));
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, 40, 0, false, false));
-                } else if (isInAir(player)) {
-                    // Player is in air, apply damage
-                    double damage = configManager.getDouble("Piranha.damage-outside-water", 2.0);
-                    player.damage(damage);
-                    player.sendMessage(ChatColor.RED + "You need to be entirely underwater!");
-                }
+                checkAndApplyEffects(player);
             }
         }.runTaskTimer(plugin, 0L, 20L); // Check every second
 
         activeTasks.put(playerId, task);
 
         return true;
+    }
+
+    private void checkAndApplyEffects(Player player) {
+        // Check if player is entirely underwater
+        if (isEntirelyUnderwater(player)) {
+            // Player is entirely underwater, give Water Breathing and Dolphin's Grace
+            player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 40, 0, false, false));
+            player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, 40, 0, false, false));
+            player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, 250, 0, false, false));
+        } else if (isInAir(player)) {
+            // Player is in air, apply damage
+            double damage = configManager.getDouble("Piranha.damage-outside-water", 2.0);
+            player.damage(damage);
+            player.sendMessage(ChatColor.RED + "You need to be in water to breathe!");
+        }
     }
 
     @Override
@@ -91,6 +103,8 @@ public class Piranha implements Challenge {
         // Remove any potion effects
         player.removePotionEffect(PotionEffectType.WATER_BREATHING);
         player.removePotionEffect(PotionEffectType.DOLPHINS_GRACE);
+        player.removePotionEffect(PotionEffectType.NIGHT_VISION);
+
     }
 
     @Override
@@ -133,6 +147,10 @@ public class Piranha implements Challenge {
                 bedEvent.setCancelled(false); // Allow the player to sleep
                 return true;
             }
+        } else if (event instanceof PlayerJoinEvent) {
+            // Immediately check and apply effects when the player logs in
+            checkAndApplyEffects(player);
+            return true;
         }
 
         return false;

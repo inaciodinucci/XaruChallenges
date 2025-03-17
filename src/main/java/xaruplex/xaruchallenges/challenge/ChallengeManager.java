@@ -77,6 +77,9 @@ public class ChallengeManager {
             playerChallenges.add(challenge);
             player.sendMessage(ChatColor.GREEN + "Challenge " + challenge.getName() + " has been applied to you!");
             player.sendMessage(ChatColor.ITALIC + "" + ChatColor.GRAY + challenge.getDescription());
+
+            // Save immediately when a challenge is added
+            saveChallenges();
             return true;
         }
 
@@ -107,6 +110,8 @@ public class ChallengeManager {
                 loseCounterEnabled.remove(playerId);
             }
 
+            // Save immediately when a challenge is removed
+            saveChallenges();
             return true;
         }
 
@@ -117,7 +122,9 @@ public class ChallengeManager {
         Set<Challenge> playerChallenges = activeChallenges.get(player.getUniqueId());
 
         if (playerChallenges != null) {
-            playerChallenges.forEach(challenge -> challenge.handleEvent(event, player));
+            for (Challenge challenge : playerChallenges) {
+                challenge.handleEvent(event, player);
+            }
         }
     }
 
@@ -187,44 +194,85 @@ public class ChallengeManager {
     }
 
     public void cleanupAllChallenges() {
-        activeChallenges.keySet().forEach(playerId -> {
+        for (UUID playerId : new HashSet<>(activeChallenges.keySet())) {
             Player player = Bukkit.getPlayer(playerId);
-
             if (player != null && player.isOnline()) {
-                activeChallenges.get(playerId).forEach(challenge -> challenge.removeChallenge(player));
+                for (Challenge challenge : new ArrayList<>(activeChallenges.get(playerId))) {
+                    challenge.removeChallenge(player);
+                }
             }
-        });
+        }
 
         activeChallenges.clear();
         loseCounters.clear();
         loseCounterEnabled.clear();
     }
 
+    // Save challenges for all players
+    private void saveChallenges() {
+        for (Map.Entry<UUID, Set<Challenge>> entry : activeChallenges.entrySet()) {
+            UUID playerId = entry.getKey();
+            Set<Challenge> challenges = entry.getValue();
+
+            List<String> challengeNames = challenges.stream()
+                    .map(Challenge::getName)
+                    .collect(Collectors.toList());
+
+            dataManager.saveChallenges(playerId, challengeNames);
+        }
+    }
+
     public void loadPlayerChallenges(Player player) {
         UUID playerId = player.getUniqueId();
+
+        // Clear existing challenges for this player first to prevent duplicates
+        if (activeChallenges.containsKey(playerId)) {
+            for (Challenge challenge : new ArrayList<>(activeChallenges.get(playerId))) {
+                challenge.removeChallenge(player);
+            }
+            activeChallenges.get(playerId).clear();
+        }
+
+        // Load challenges from database
         List<String> challengeNames = dataManager.loadChallenges(playerId);
+        if (challengeNames.isEmpty()) {
+            plugin.getLogger().info("No challenges found for player " + player.getName());
+            return;
+        }
+
+        // Log loaded challenges for debugging
+        plugin.getLogger().info("Loading " + challengeNames.size() + " challenges for " + player.getName() + ": " + String.join(", ", challengeNames));
+
         Set<Challenge> playerChallenges = activeChallenges.computeIfAbsent(playerId, k -> new HashSet<>());
 
-        challengeNames.stream()
-                .map(name -> availableChallenges.get(name.toLowerCase()))
-                .filter(Objects::nonNull)
-                .filter(challenge -> !playerChallenges.contains(challenge))
-                .forEach(challenge -> {
-                    if (challenge.applyChallenge(player)) {
-                        playerChallenges.add(challenge);
-                    }
-                });
+        for (String name : challengeNames) {
+            Challenge challenge = availableChallenges.get(name.toLowerCase());
+            if (challenge != null) {
+                if (challenge.applyChallenge(player)) {
+                    playerChallenges.add(challenge);
+                    plugin.getLogger().info("Applied challenge " + challenge.getName() + " to " + player.getName());
+                } else {
+                    plugin.getLogger().warning("Failed to apply challenge " + challenge.getName() + " to " + player.getName());
+                }
+            } else {
+                plugin.getLogger().warning("Unknown challenge: " + name);
+            }
+        }
     }
 
     public void savePlayerChallenges(Player player) {
         UUID playerId = player.getUniqueId();
         Set<Challenge> challenges = activeChallenges.get(playerId);
 
-        if (challenges != null) {
+        if (challenges != null && !challenges.isEmpty()) {
             List<String> challengeNames = challenges.stream()
                     .map(Challenge::getName)
                     .collect(Collectors.toList());
+
+            plugin.getLogger().info("Saving challenges for " + player.getName() + ": " + String.join(", ", challengeNames));
             dataManager.saveChallenges(playerId, challengeNames);
+        } else {
+            plugin.getLogger().info("No challenges to save for " + player.getName());
         }
     }
 }

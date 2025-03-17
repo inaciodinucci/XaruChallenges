@@ -1,5 +1,7 @@
 package xaruplex.xaruchallenges.challenge.challenges;
 
+import org.bukkit.block.Biome;
+import org.jetbrains.annotations.NotNull;
 import xaruplex.xaruchallenges.XaruChallenges;
 import xaruplex.xaruchallenges.challenge.Challenge;
 import xaruplex.xaruchallenges.config.ConfigManager;
@@ -16,12 +18,53 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Arrays;
+import java.util.List;
 
 public class Chinchilla implements Challenge {
 
     private final XaruChallenges plugin;
     private final ConfigManager configManager;
     private final Map<UUID, BukkitTask> rainDamageTasks = new HashMap<>();
+
+    // List of biomes where it can rain (updated to current Minecraft biomes)
+    private final List<Biome> rainyBiomes = Arrays.asList(
+            // Regular forests
+            Biome.FOREST, Biome.FLOWER_FOREST, Biome.BIRCH_FOREST,
+            Biome.OLD_GROWTH_BIRCH_FOREST, Biome.DARK_FOREST,
+
+            // Taiga variants (that can have rain, not snow)
+            Biome.TAIGA, Biome.OLD_GROWTH_PINE_TAIGA, Biome.OLD_GROWTH_SPRUCE_TAIGA,
+
+            // Jungle variants
+            Biome.JUNGLE, Biome.SPARSE_JUNGLE, Biome.BAMBOO_JUNGLE,
+
+            // Plains variants
+            Biome.PLAINS, Biome.SUNFLOWER_PLAINS, Biome.MEADOW,
+
+            // Water-related biomes
+            Biome.RIVER, Biome.BEACH, Biome.OCEAN, Biome.LUKEWARM_OCEAN,
+            Biome.DEEP_LUKEWARM_OCEAN, Biome.DEEP_OCEAN,
+
+            // Other temperate biomes
+            Biome.SWAMP, Biome.MANGROVE_SWAMP, Biome.MUSHROOM_FIELDS,
+
+            // Windswept variants (that can have rain, not snow)
+            Biome.WINDSWEPT_FOREST, Biome.WINDSWEPT_HILLS,
+            Biome.WINDSWEPT_GRAVELLY_HILLS, Biome.WINDSWEPT_SAVANNA,
+
+            // Cave biomes where rain can reach
+            Biome.LUSH_CAVES, Biome.DRIPSTONE_CAVES,
+
+            // Cherry biome
+            Biome.CHERRY_GROVE,
+
+            // Savanna variants (which can have rain occasionally)
+            Biome.SAVANNA, Biome.SAVANNA_PLATEAU,
+
+            // Other biomes where it can rain
+            Biome.STONY_SHORE, Biome.GROVE
+    );
 
     public Chinchilla(XaruChallenges plugin, ConfigManager configManager) {
         this.plugin = plugin;
@@ -122,7 +165,7 @@ public class Chinchilla implements Challenge {
         World world = player.getWorld();
 
         // Check if it's raining and the player is in a biome where it can rain
-        if (!world.hasStorm() || !world.getBiome(player.getLocation()).toString().toLowerCase().contains("rain")) {
+        if (!world.hasStorm() || !canRainInBiome(world.getBiome(player.getLocation()))) {
             return false;
         }
 
@@ -131,6 +174,11 @@ public class Chinchilla implements Challenge {
         int highestBlockY = world.getHighestBlockYAt(player.getLocation());
 
         return playerY >= highestBlockY;
+    }
+
+    private boolean canRainInBiome(@NotNull Biome biome) {
+        // Using a predefined list for more maintainable code
+        return rainyBiomes.contains(biome);
     }
 
     private boolean isAllowedFood(Material food) {
