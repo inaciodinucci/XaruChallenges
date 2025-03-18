@@ -1,5 +1,5 @@
 name: XaruChallenges
-version: 1.0
+version: 0.1.5-SNAPSHOT
 main: xaruplex.xaruchallenges.XaruChallenges
 api-version: 1.21
 description: A plugin that adds gameplay challenges to modify player behavior

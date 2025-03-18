@@ -8,7 +8,6 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.*;
 import org.bukkit.event.Event;
 import org.bukkit.event.entity.*;
-import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -16,6 +15,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.potion.PotionType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import xaruplex.xaruchallenges.XaruChallenges;
@@ -33,8 +33,9 @@ public class Vampire implements Challenge {
     private final Map<UUID, BukkitTask> activeTasks = new HashMap<>();
     private final Map<UUID, Long> lastHungerDecay = new HashMap<>();
     private final Map<UUID, Long> lastBloodDrain = new HashMap<>();
-    private static final long HUNGER_DECAY_DELAY = 8000; // 8 seconds (4x slower than normal)
-    private static final long BLOOD_DRAIN_COOLDOWN = 1000; // 1 second cooldown
+    private static final long HUNGER_DECAY_DELAY = 8000;
+    private static final long BLOOD_DRAIN_COOLDOWN = 1000;
+    private static final Material BLOOD_MATERIAL = Material.POTION;
 
     public Vampire(XaruChallenges plugin, ConfigManager configManager) {
         this.plugin = plugin;
@@ -48,10 +49,10 @@ public class Vampire implements Challenge {
 
     @Override
     public String getDescription() {
-        return "You can only walk in shadows and at night. Sunlight causes fire damage. " +
-                "Regain health and hunger by attacking players or villagers. Killing players fully restores you. " +
-                "You can only eat golden apples and drink potions (except Fire Resistance). " +
-                "Right-click on players or villagers with an empty bottle to collect their blood. ";
+        return "You can only walk in shadows and at night. Sunlight causes fire damage. "
+                + "Regain health and hunger by attacking players or villagers. Killing players fully restores you. "
+                + "You can only eat golden apples and drink potions (except Fire Resistance). "
+                + "Hit players or villagers with an empty bottle to collect their blood.";
     }
 
     @Override
@@ -74,19 +75,12 @@ public class Vampire implements Challenge {
                     player.damage(damage);
                 }
 
-                // Apply Night Vision regardless of the time of day
                 applyNightBuffs(player);
-
-                // Apply night-specific buffs only during the night
                 if (isNight(player.getWorld())) {
                     applyNightSpecificBuffs(player);
                 }
 
-                // Prevent insomnia (phantoms) by resetting the player's insomnia timer
                 player.setStatistic(org.bukkit.Statistic.TIME_SINCE_REST, 0);
-
-                // Make villagers afraid of the vampire
-                makeVillagersAfraid(player);
             }
         }.runTaskTimer(plugin, 0L, 10L);
 
@@ -120,28 +114,110 @@ public class Vampire implements Challenge {
             return handleConsumeEvent((PlayerItemConsumeEvent) event, player);
         } else if (event instanceof EntityPotionEffectEvent) {
             return handlePotionEffectEvent((EntityPotionEffectEvent) event, player);
-        } else if (event instanceof PlayerInteractEntityEvent) {
-            return handleInteractEntityEvent((PlayerInteractEntityEvent) event, player);
-        } else if (event instanceof PlayerInteractAtEntityEvent) {
-            return handleInteractAtEntityEvent((PlayerInteractAtEntityEvent) event, player);
         }
         return false;
     }
 
     private boolean handleDamageEvent(EntityDamageByEntityEvent event, Player player) {
-        if (event.getDamager().equals(player) && (event.getEntity() instanceof Player || event.getEntity() instanceof Villager)) {
-            healPlayer(player, 2.0, 2, 2);
+        if (event.getDamager().equals(player)) {
+            // Handle blood bottle collection
+            if ((event.getEntity() instanceof Player || event.getEntity() instanceof Villager) &&
+                    isHoldingEmptyBottle(player)) {
 
-            if (event.getEntity() instanceof Player) {
-                Player victim = (Player) event.getEntity();
-                victim.damage(2.0);
-                victim.setFoodLevel(Math.max(victim.getFoodLevel() - 2, 0));
+                // Check cooldown
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastBloodDrain.getOrDefault(player.getUniqueId(), 0L) < BLOOD_DRAIN_COOLDOWN) {
+                    player.sendMessage(ChatColor.RED + "You must wait before draining blood again!");
+                    return false;
+                }
+
+                lastBloodDrain.put(player.getUniqueId(), currentTime);
+
+                // Process blood collection
+                LivingEntity target = (LivingEntity) event.getEntity();
+                collectBlood(player, target);
+
+                event.setCancelled(true);
+                return true;
             }
 
-            player.sendMessage(ChatColor.DARK_RED + "You drain their life force!");
-            return true;
+            // Regular vampire attack
+            else if (event.getEntity() instanceof Player || event.getEntity() instanceof Villager) {
+                event.setCancelled(true);
+                healPlayer(player, 2.0, 2, 2);
+
+                if (event.getEntity() instanceof LivingEntity) {
+                    LivingEntity target = (LivingEntity) event.getEntity();
+                    target.damage(2.0);
+
+                    if (target instanceof Player) {
+                        Player victim = (Player) target;
+                        victim.setFoodLevel(Math.max(victim.getFoodLevel() - 2, 0));
+                    }
+                }
+
+                player.sendMessage(ChatColor.DARK_RED + "You drain their life force!");
+                return true;
+            }
         }
         return false;
+    }
+
+    private boolean isHoldingEmptyBottle(Player player) {
+        ItemStack mainHand = player.getInventory().getItemInMainHand();
+        ItemStack offHand = player.getInventory().getItemInOffHand();
+        return mainHand.getType() == Material.GLASS_BOTTLE || offHand.getType() == Material.GLASS_BOTTLE;
+    }
+
+    private void collectBlood(Player player, LivingEntity target) {
+        // Create blood potion
+        ItemStack bloodPotion = createBloodPotion(target);
+
+        // Damage logic
+        target.damage(2.0, player);
+
+        if (target instanceof Player) {
+            Player victim = (Player) target;
+            victim.setFoodLevel(Math.max(victim.getFoodLevel() - 3, 0));
+            victim.setSaturation(Math.max(victim.getSaturation() - 3, 0));
+            victim.sendMessage(ChatColor.RED + "A vampire has drained your blood into a bottle!");
+        }
+
+        // Heal vampire
+        healPlayer(player, 2.0, 2, 2);
+
+        // Find and process bottle
+        ItemStack mainHand = player.getInventory().getItemInMainHand();
+        if (mainHand.getType() == Material.GLASS_BOTTLE) {
+            mainHand.setAmount(mainHand.getAmount() - 1);
+
+            // Try to add blood to existing stack or create new one
+            addBloodToInventory(player, bloodPotion);
+        } else {
+            ItemStack offHand = player.getInventory().getItemInOffHand();
+            offHand.setAmount(offHand.getAmount() - 1);
+
+            // Try to add blood to existing stack or create new one
+            addBloodToInventory(player, bloodPotion);
+        }
+
+        player.sendMessage(ChatColor.DARK_RED + "You collected blood in a bottle! Drink it to restore yourself.");
+    }
+
+    private void addBloodToInventory(Player player, ItemStack bloodPotion) {
+        // Try to find an existing blood stack first
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && isBloodPotion(item) && item.getAmount() < 64) {
+                item.setAmount(item.getAmount() + 1);
+                return;
+            }
+        }
+
+        // No existing stack or all stacks are full, add as new item
+        HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(bloodPotion);
+        leftover.values().forEach(leftoverItem ->
+                player.getWorld().dropItemNaturally(player.getLocation(), leftoverItem)
+        );
     }
 
     private boolean handleDeathEvent(EntityDeathEvent event, Player player) {
@@ -179,17 +255,22 @@ public class Vampire implements Challenge {
                 return true;
             }
 
-            // Apply stored effects from the blood potion
-            PotionMeta meta = (PotionMeta) item.getItemMeta();
-            if (meta != null) {
-                for (PotionEffect effect : meta.getCustomEffects()) {
-                    if (effect.getType() == PotionEffectType.REGENERATION) {
-                        healPlayer(player, 4.0, 5, 6);
-                    } else if (effect.getType() == PotionEffectType.FIRE_RESISTANCE) {
-                        player.setHealth(0);
-                        player.sendMessage(ChatColor.RED + "The blood contained Fire Resistance! You have been killed!");
-                        return true;
-                    }
+            healPlayer(player, 2.0, 2, 2);
+
+            // Consume the potion
+            ItemStack mainHand = player.getInventory().getItemInMainHand();
+            if (mainHand.isSimilar(item)) {
+                if (mainHand.getAmount() > 1) {
+                    mainHand.setAmount(mainHand.getAmount() - 1);
+                } else {
+                    player.getInventory().setItemInMainHand(new ItemStack(Material.GLASS_BOTTLE));
+                }
+            } else {
+                ItemStack offHand = player.getInventory().getItemInOffHand();
+                if (offHand.getAmount() > 1) {
+                    offHand.setAmount(offHand.getAmount() - 1);
+                } else {
+                    player.getInventory().setItemInOffHand(new ItemStack(Material.GLASS_BOTTLE));
                 }
             }
 
@@ -222,85 +303,15 @@ public class Vampire implements Challenge {
         return false;
     }
 
-    private boolean handleInteractEntityEvent(PlayerInteractEntityEvent event, Player player) {
-        return processEntityInteraction(player, event.getRightClicked(), event.getHand());
-    }
-
-    private boolean handleInteractAtEntityEvent(PlayerInteractAtEntityEvent event, Player player) {
-        return processEntityInteraction(player, event.getRightClicked(), event.getHand());
-    }
-
-    private boolean processEntityInteraction(Player player, Entity target, EquipmentSlot hand) {
-        if (!activeTasks.containsKey(player.getUniqueId())) return false;
-
-        // Check if the player is sneaking (shift + right-click)
-        if (!player.isSneaking()) return false;
-
-        // Ensure the interaction is with the main hand
-        if (hand != EquipmentSlot.HAND) return false;
-
-        // Check cooldown
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastBloodDrain.getOrDefault(player.getUniqueId(), 0L) < BLOOD_DRAIN_COOLDOWN) {
-            return false;
-        }
-
-        // Ensure the target is a player or villager
-        if (!(target instanceof Player) && !(target instanceof Villager)) return false;
-
-        // Ensure the player is holding an empty glass bottle
-        ItemStack item = player.getInventory().getItemInMainHand();
-        if (item.getType() != Material.GLASS_BOTTLE || item.getAmount() != 1) return false;
-
-        lastBloodDrain.put(player.getUniqueId(), currentTime);
-
-        // Create blood potion with stored effects
-        ItemStack bloodPotion = new ItemStack(Material.POTION);
+    private ItemStack createBloodPotion(LivingEntity target) {
+        ItemStack bloodPotion = new ItemStack(BLOOD_MATERIAL);
         PotionMeta meta = (PotionMeta) bloodPotion.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ChatColor.DARK_RED + "Blood");
-            meta.setColor(org.bukkit.Color.fromRGB(139, 0, 0)); // Dark red color
 
-            // Store regeneration effect for health and hunger restoration
-            meta.addCustomEffect(new PotionEffect(PotionEffectType.REGENERATION, 1, 0, false, false), true);
+        meta.setDisplayName(ChatColor.DARK_RED + "Blood");
+        meta.setColor(org.bukkit.Color.fromRGB(139, 0, 0));
 
-            // If target has Fire Resistance, store it in the blood (will kill vampire when consumed)
-            if (target instanceof LivingEntity) {
-                LivingEntity livingTarget = (LivingEntity) target;
-                if (livingTarget.hasPotionEffect(PotionEffectType.FIRE_RESISTANCE)) {
-                    meta.addCustomEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 1, 0, false, false), true);
-                }
-            }
-
-            bloodPotion.setItemMeta(meta);
-        }
-
-        // Damage and hunger drain logic
-        if (target instanceof LivingEntity) {
-            LivingEntity livingTarget = (LivingEntity) target;
-            livingTarget.damage(2.0);
-
-            if (target instanceof Player) {
-                Player victim = (Player) target;
-                victim.setFoodLevel(Math.max(victim.getFoodLevel() - 3, 0));
-                victim.setSaturation(Math.max(victim.getSaturation() - 3, 0));
-                victim.sendMessage(ChatColor.RED + "A vampire has drained your blood into a bottle!");
-            }
-        }
-
-        // Give blood potion to vampire
-        if (item.getAmount() == 1) {
-            player.getInventory().setItemInMainHand(bloodPotion);
-        } else {
-            item.setAmount(item.getAmount() - 1);
-            Map<Integer, ItemStack> overflow = player.getInventory().addItem(bloodPotion);
-            if (!overflow.isEmpty()) {
-                player.getWorld().dropItemNaturally(player.getLocation(), bloodPotion);
-            }
-        }
-
-        player.sendMessage(ChatColor.DARK_RED + "You collected blood in a bottle! Drink it to restore yourself.");
-        return true;
+        bloodPotion.setItemMeta(meta);
+        return bloodPotion;
     }
 
     private void healPlayer(Player player, double health, int food, float saturation) {
@@ -324,16 +335,31 @@ public class Vampire implements Challenge {
                 item.getType() == Material.LINGERING_POTION) {
 
             PotionMeta meta = (PotionMeta) item.getItemMeta();
-            return meta != null && meta.hasCustomEffect(PotionEffectType.FIRE_RESISTANCE);
+            if (meta != null) {
+                // Check base potion type
+                PotionType baseType = meta.getBasePotionType();
+                if (baseType != null && baseType.getEffectType() == PotionEffectType.FIRE_RESISTANCE) {
+                    return true;
+                }
+
+                // Check custom effects
+                for (PotionEffect effect : meta.getCustomEffects()) {
+                    if (effect.getType() == PotionEffectType.FIRE_RESISTANCE) {
+                        return true;
+                    }
+                }
+            }
         }
         return false;
     }
 
     private boolean isBloodPotion(ItemStack item) {
-        if (item.getType() == Material.POTION && item.hasItemMeta()) {
+        if (item.getType() == BLOOD_MATERIAL && item.hasItemMeta()) {
             PotionMeta meta = (PotionMeta) item.getItemMeta();
-            return meta.hasDisplayName() &&
+            return meta != null &&
+                    meta.hasDisplayName() &&
                     ChatColor.stripColor(meta.getDisplayName()).equals("Blood") &&
+                    meta.getColor() != null &&
                     meta.getColor().equals(org.bukkit.Color.fromRGB(139, 0, 0));
         }
         return false;
@@ -358,12 +384,10 @@ public class Vampire implements Challenge {
     }
 
     private void applyNightBuffs(Player player) {
-        // Apply Night Vision regardless of the time of day
         player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, 400, 0, true, false));
     }
 
     private void applyNightSpecificBuffs(Player player) {
-        // Apply night-specific buffs (Speed and Jump Boost)
         player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 400, 0, true, false));
         player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, 400, 1, true, false));
     }
@@ -372,15 +396,5 @@ public class Vampire implements Challenge {
         player.removePotionEffect(PotionEffectType.NIGHT_VISION);
         player.removePotionEffect(PotionEffectType.SPEED);
         player.removePotionEffect(PotionEffectType.JUMP_BOOST);
-    }
-
-    private void makeVillagersAfraid(Player player) {
-        for (Entity entity : player.getNearbyEntities(10, 10, 10)) {
-            if (entity instanceof Villager) {
-                Villager villager = (Villager) entity;
-                // Make the villager run away from the vampire
-                villager.setTarget(player);
-            }
-        }
     }
 }

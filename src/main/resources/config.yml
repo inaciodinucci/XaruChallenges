@@ -140,6 +140,7 @@ Vegan:
     - TROPICAL_FISH
     - PUFFERFISH
     - MILK_BUCKET
+    - ROTTEN_FLESH
   forbidden-potions:
     - SLOWNESS
     - WEAKNESS

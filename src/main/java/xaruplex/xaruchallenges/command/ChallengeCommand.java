@@ -74,7 +74,7 @@ public class ChallengeCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendChallengeList(CommandSender sender) {
-        sender.sendMessage(ChatColor.GREEN + "=== Available Challenges ===");
+        sender.sendMessage(ChatColor.GREEN + "=== XaruChallenges Available Challenges ===");
 
         for (String challengeName : challengeManager.getAllChallengeNames()) {
             Challenge challenge = challengeManager.getChallengeByName(challengeName);
