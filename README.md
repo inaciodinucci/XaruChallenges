@@ -38,11 +38,17 @@ A Minecraft Spigot/Paper plugin (1.21.4) that adds 13+ unique, punishing challen
 ## ⚙️ Commands
 Main command: `/xaruchallenges` or `/xc`
 /xc help - Show command list
+
 /xc list - Display available challenges
+
 /xc add <challenge> <player> - Assign challenge to player
+
 /xc remove <challenge> <player> - Remove challenge from player
+
 /xc challenges <player> - Show active challenges
+
 /xc losecounter <enable|disable> - Toggle death counter display
+
 /xc reload - Reload plugin configuration
 
 
