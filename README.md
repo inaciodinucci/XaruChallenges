@@ -47,10 +47,12 @@ Main command: `/xaruchallenges` or `/xc`
 
 
 ## 🔐 Permissions
-xaruchallenges.use - Basic command access (default: true)
+**xaruchallenges.use** - Basic command access (default: true)
 
 Allows: help, list, challenges
-xaruchallenges.admin - Full administrative access (default: op)
+
+
+**xaruchallenges.admin** - Full administrative access (default: op)
 
 Allows: add, remove, reload, losecounter
 
