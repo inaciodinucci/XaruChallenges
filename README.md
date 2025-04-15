@@ -74,4 +74,5 @@ Allows: add, remove, reload, losecounter
 > This plugin creates intense gameplay experiences. Test challenges before deploying on production servers!
 
 > **Note**  
-> The losecounter feature tracks and displays player deaths caused by challenge failures (MAYBE NOT WORKING BECAUSE OF WIP)
+> The losecounter feature tracks and displays player deaths caused by challenge failures 
+> Some of the challengs are still at Work in progress
